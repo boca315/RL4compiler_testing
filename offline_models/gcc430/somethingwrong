@@ -1,0 +1,26 @@
+#! /bin/sh
+
+## ./test/fail.737-7666.feature 2 ./train/fail.71-7000.feature 6930 6929
+
+
+# toid=71
+
+# for i in `seq 737 7666`
+# do
+#     echo ./test/fail.${i}.feature
+#     echo ./train/fail.${toid}.feature
+#     mv ./test/fail.${i}.feature ./train/fail.${toid}.feature
+#     toid=$(($toid+1))
+# done
+
+
+##  ./test/fail.7667-7673.feature  2 ./test/fail.737-743.feature
+toid=737
+
+for i in `seq 7667 7673`
+do
+    echo ./test/fail.${i}.feature
+    echo ./test/fail.${toid}.feature
+    mv ./test/fail.${i}.feature ./test/fail.${toid}.feature
+    toid=$(($toid+1))
+done

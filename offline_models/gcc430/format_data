@@ -1,0 +1,26 @@
+#! /bin/sh
+
+root=$PWD
+dr=$(ls -R| grep :| xargs -n 1 -I dir echo dir)
+id=22069
+for i in $dr # trainprogram19052_feature
+do
+    cd  ${i%%:*}
+    files=$(ls | grep feature |xargs -n 1 -I file echo file)
+    for j in $files
+    do
+        id=$(($id+1))
+        filetype=${i#*/}
+        filetype=${filetype%:*}
+        filetype=${filetype%/*}
+        cate='pass'
+        if [ $filetype != "pass" ]
+        then
+           cate='fail'
+        fi
+        # echo ${j}
+        # echo    /train_dir/train/${cate}.${id}.feature
+        mv ${j} /train_dir/train/${cate}.${id}.feature
+    done
+    cd $root
+done

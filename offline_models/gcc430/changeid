@@ -1,0 +1,40 @@
+#! /bin/sh
+
+root=$PWD
+
+trainpass=$(ls /train_dir/train | grep pass)
+
+trainfail=$(ls /train_dir/train | grep fail)
+testpass=$(ls /train_dir/test2 | grep pass)
+testfail=$(ls /train_dir/test2 | grep fail)
+
+
+id=13133
+for i in $trainfail
+do
+    echo /train_dir/train/$i
+    echo /train_dir/train/fail.${id}.feature
+    mv /train_dir/train/$i /train_dir/train/fail.${id}.feature
+    id=$(($id+1))
+done
+
+
+id=1
+for i in $testpass
+do
+    echo /train_dir/test2/$i
+    echo /train_dir/test/pass.${id}.feature
+    mv /train_dir/test2/$i /train_dir/test/pass.${id}.feature
+    id=$(($id+1))
+done
+
+
+for i in $testfail
+do
+    echo /train_dir/test2/$i
+    echo /train_dir/test/fail.${id}.feature
+    mv /train_dir/test2/$i /train_dir/test/fail.${id}.feature
+    id=$(($id+1))
+done
+
+
