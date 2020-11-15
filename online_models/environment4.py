@@ -2,6 +2,7 @@
 import os, gc, time, random
 import numpy as np
 import pandas as pd
+import torch
 
 seed = 223991
 
@@ -22,6 +23,8 @@ random.seed(seed)
 os.environ['PYTHONHASHSEED'] = str(seed)
 np.random.seed(seed)
 
+ACTION_BOUND = range(-5,6)
+DISTANCE_BASELINE_TYPE = 'ase' ## 'default' 'no' 'ase'
 
 
 categories_dir={
@@ -365,6 +368,8 @@ class Environment:
     def manhattan_distance(self, feature_vector, feature_vectors):
         def norm(v, vs):
             vs = np.array(vs)
+            # print(vs,'\n',v)
+            # print(len(vs[0]),len(v))
             m = np.append(vs, [v], axis=0)
             m_normed = m / m.max(axis=0)
             where_are_nan = np.isnan(m_normed)  # xmax=0, div by 0
@@ -398,6 +403,15 @@ class Environment:
         # print(cat)
         res = clf.score(X, y)
         return cat, res #[0,0,1,1] 0.86
+
+    def distance_baseline(self, fv, baseline_type):
+        if baseline_type == 'default':
+            baseline = 0.2
+        elif baseline_type == 'ase':
+            baseline = 0.3
+        else:
+            return 0
+        return baseline
 
     def constrainCheck(self):
         import copy
@@ -477,10 +491,6 @@ class Environment:
                 print("constrain2")
                 self.base_itm_group['simple_types_prob']['void_prob'] = 0
                 print(self.base_itm_group['simple_types_prob'])
-
-
-
-
 
     def reset(self):
         self.base_itm_single, self.base_itm_group = defaultConfig()
@@ -642,8 +652,8 @@ class Environment:
                                 './trainprogram' + str(i) + '_3') or not os.path.exists(
                                 './trainprogram' + str(i) + '_s'):
                 res.write(str(i) + ',crash, ' + seed + '\n')
-                exccmd('mkdir ' + crashres + '/trainprogram' + str(i))
-                exccmd('mv ' + 'trainprogram* ' + crashres + '/trainprogram' + str(i))
+                # exccmd('mkdir ' + crashres + '/trainprogram' + str(i))
+                # exccmd('mv ' + 'trainprogram* ' + crashres + '/trainprogram' + str(i))
 
                 # prog_fail += 1
                 bilabels.append(categories_dir['crash'])
@@ -741,8 +751,8 @@ class Environment:
                 f.close()
                 if len(lines) == 0:
                     res.write(str(i) + ',wrongcode, ' + seed + '\n')
-                    exccmd('mkdir ' + wrongcoderes + '/trainprogram' + str(i))
-                    exccmd('mv ' + 'trainprogram* ' + wrongcoderes + '/trainprogram' + str(i))
+                    # exccmd('mkdir ' + wrongcoderes + '/trainprogram' + str(i))
+                    # exccmd('mv ' + 'trainprogram* ' + wrongcoderes + '/trainprogram' + str(i))
 
                     # prog_fail += 1
                     bilabels.append(categories_dir['wrongcode'])
@@ -774,8 +784,8 @@ class Environment:
                     f.close()
                     if not (len(lines1) == 0 and len(lines2) == 0 and len(lines3) == 0 and len(lines4) == 0):
                         res.write(str(i) + ',wrongcode, ' + seed + '\n')
-                        exccmd('mkdir ' + wrongcoderes + '/trainprogram' + str(i))
-                        exccmd('mv ' + 'trainprogram* ' + wrongcoderes + '/trainprogram' + str(i))
+                        # exccmd('mkdir ' + wrongcoderes + '/trainprogram' + str(i))
+                        # exccmd('mv ' + 'trainprogram* ' + wrongcoderes + '/trainprogram' + str(i))
 
                         # prog_fail += 1
                         bilabels.append(categories_dir['wrongcode'])
@@ -815,6 +825,7 @@ class Environment:
             for fv in feature_vectors:
                 prog_intra_diversity += self.manhattan_distance(fv, feature_vectors)
 
+            prog_intra_diversity = prog_intra_diversity / len(feature_vectors)
             actual_fail = bilabels.count(categories_dir['crash'])/(len(bilabels)+generation)# or wrongcode, both is 1
             actual_penetrate = (bilabels.count(categories_dir['crash']) - generation) / (len(bilabels)+generation)
             predict_cat, predict_score = self.get_offline_prediction(model_path,np.array(feature_vectors),np.array(bilabels))
@@ -827,10 +838,6 @@ class Environment:
             return actual_penetrate, predict_fail, prog_intra_diversity, list(np.mean(np.array(feature_vectors),axis=0))
         else: # config timeout
             return np.nan, np.nan, np.nan, []
-
-
-
-
 
     """
     get score of current configuration just updated in step(.)
@@ -859,10 +866,10 @@ class Environment:
         if len(avg_fv)!=0:
             self.fv_history.append(avg_fv)
             inter_diversity = self.manhattan_distance(avg_fv, self.fv_history) # distance between this config and previous ones
-            # reward = actual_fail + predict_fail + intra_diversity + inter_diversity
-            reward =  predict_fail
-            # reward =  intra_diversity + inter_diversity
+            reward = actual_fail + predict_fail + intra_diversity + inter_diversity
 
+            # reward =  predict_fail
+            # reward =  intra_diversity + inter_diversity - 2 * self.distance_baseline(avg_fv,DISTANCE_BASELINE_TYPE)
 
 
 
@@ -882,12 +889,25 @@ class Environment:
             return np.nan
 
 
-
-
     def step(self, actions):
+        actions_ = []
+        res = open('loss_log.txt', 'a')
+        res.flush()
+        res.write('config:[')
+        for v in self.vals:
+            res.write(str(v)+',')
+        res.write(']\n')
+        res.write('action:[')
+        for a in actions:
+            a_ = a - torch.tensor(len(ACTION_BOUND) / 2).long()
+            actions_.append(a_)
+            res.write(str(a_)+',')
+        res.write(']')
+        res.close()
+
         old_vals = self.vals
         for i in range(len(actions)):
-            self.vals[i] = np.clip(self.vals[i] + actions[i], 0, 100).item()
+            self.vals[i] = np.clip(self.vals[i] + actions_[i], 0, 100).item()
         self.base_itm_single, self.base_itm_group = self.vals2dic(self.vals)
         self.constrainCheck()
         reward = self.score()
@@ -897,6 +917,9 @@ class Environment:
             return np.array(self.vals), reward, False, {}
         else:
             return np.array(self.vals), reward, True, {}
+
+
+
 
 
 

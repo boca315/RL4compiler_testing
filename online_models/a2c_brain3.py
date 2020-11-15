@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import time,random, os
 import numpy as np
-from environment4 import Environment, single_keys, group_keys, group_items_keys, defaultConfig, N_PROGRAMS, seed
-# from .environment4 import Environment, single_keys, group_keys, group_items_keys,seed
+from environment4 import Environment, single_keys, group_keys, group_items_keys, defaultConfig, N_PROGRAMS, seed, ACTION_BOUND
+# from .environment4 import Environment, single_keys, group_keys, group_items_keys,seed, ACTION_BOUND
 
 
 random.seed(seed)
@@ -107,40 +107,54 @@ class A2CNet(nn.Module):
         action_prob = F.softmax(policy, dim=-1)
         cat = torch.distributions.Categorical(action_prob)
         action = cat.sample()
-        return action # [1
+        return action
 
     def loss_func(self, s, a, v_t):
         self.train()
         policies, values = self.forward(s)
         td = v_t - values
-        c_loss = td.pow(2)
+        c_loss = td.pow(2) # grad_c = td^2
 
         probs = F.softmax(policies, dim=1)
         m = self.distribution(probs)
-        # print(m.log_prob(a).size())
         exp_v = m.log_prob(a) * td.detach().squeeze()
-        # print(exp_v.size(),c_loss.size())
-        a_loss = -exp_v
+        a_loss = -exp_v # grad_a = -td^log(a)
         total_loss = (c_loss + a_loss).mean()
+
+        losslog = open('loss_log.txt', 'a')
+        losslog.flush()
+        losslog.write('v_t is:' + str(v_t) + '\n')
+        losslog.write('policy is:' + str(policies) + '\n')
+        losslog.write('value is:' + str(values) + '\n')
+        losslog.write('td is:' + str(td) + '\n')
+        losslog.write('c_loss is:' + str(c_loss) + '\n')
+        losslog.write('prob is:' + str(probs) + '\n')
+        losslog.write('m is:' + str(m) + '\n')
+        losslog.write('m.log_prob(a) is:' + str(m.log_prob(a)) + '\n')
+        losslog.write('exp_v is:' + str(exp_v) + '\n')
+        losslog.write("a_loss: " + str(a_loss) + '\n')
+        losslog.write("total_loss: " + str(total_loss) + '\n')
+        losslog.close()
+
         return total_loss
 
 MAX_EPISODE = 200
-K_STEPS = 5 # instead of reset env, forward loss every Kstep
+K_STEPS = 10
 env = Environment()
 N_S = env.s_dim
-ACTION_BOUND = [-5,5]
-GAMMA = 0.9
+GAMMA = 0.2 # 0.9
 
 check_mem = True
 
 nets = []
 optims = []
+
+# add agent and optimizer
 for param in single_keys:
     net = A2CNet(N_S,len(ACTION_BOUND),param)
     nets.append(net)
     optim = torch.optim.Adam(net.parameters(), lr=0.01)
     optims.append(optim)
-
 for group in group_keys:
     group_dir = group_items_keys[group]
     for param in group_dir:
@@ -168,14 +182,12 @@ for i_episode in range(MAX_EPISODE):
         actions = []
         for net in nets:
             s = torch.tensor(s, dtype=torch.float32)
-            # print(s.size())
             a = net.choose_action(s)
             actions.append(a)
         s_, r, done, info = env.step(actions)
-        if not done: #timeout
-            # continue
-            s_ = s
-            r = -4 # reward of all generation config
+        if not done: # generation, restart exploration and get penalty
+            s_ = env.reset()
+            r = -4
         s_ = torch.tensor(s_, dtype=torch.float32)
 
         buffer_a.append(actions)
@@ -186,17 +198,14 @@ for i_episode in range(MAX_EPISODE):
         t += 1
 
         if t > K_STEPS:
-            print('buffer a',buffer_a)
-            print('buffer s',buffer_s)
-            print('buffer r',buffer_r)
-            # print(len(buffer_a),len(buffer_s),len(buffer_r))
-            for n in range(len(nets)):
-                # init_s = torch.tensor(env.dic2vals(defaultConfig()))
+            for n in range(len(nets)): # Kstep is over
+                # calculate the loss function and backpropagate
+                v_s_ = nets[n](buffer_s[-1])[-1].data.numpy()[0]
                 buffer_v_target = []
-                for i in range(len(buffer_s)):
-                    v_s_ = nets[n](buffer_s[i])[-1].data.numpy()[0]  # nets[n].forward(s_)
-                    v_s_ = buffer_r[i] + GAMMA * v_s_
+                for r in buffer_r[::-1]:  # reverse buffer r
+                    v_s_ = r + GAMMA * v_s_
                     buffer_v_target.append(v_s_)
+
                 buffer_v_target.reverse()
 
                 ss = torch.stack(buffer_s)

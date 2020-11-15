@@ -63,6 +63,6 @@ results = cross_val_score(model, feature_vectors, bilabels, cv=10)
 print(results)
 print("Accuracy: %.2f%% (%.2f%%)" % (results.mean()*100, results.std()*100))
 
-joblib.dump(model, 'xgb_sample_weight3.pkl')
+joblib.dump(model, 'xgb.pkl')
 
 # clf = joblib.load('xgb.pkl')

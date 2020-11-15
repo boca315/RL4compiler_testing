@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import time,random, os
 import numpy as np
-from environment4 import Environment, single_keys, group_keys, group_items_keys, defaultConfig, N_PROGRAMS, seed
-# from .environment4 import Environment, single_keys, group_keys, group_items_keys,defaultConfig, N_PROGRAMS, seed
+from environment4 import Environment, single_keys, group_keys, group_items_keys, defaultConfig, N_PROGRAMS, seed, ACTION_BOUND
+# from .environment4 import Environment, single_keys, group_keys, group_items_keys,defaultConfig, N_PROGRAMS, seed, ACTION_BOUND
 
 
 random.seed(seed)
@@ -116,26 +116,52 @@ class A2CNet(nn.Module):
         td = v_t - value
         # print('td',td.size())
         c_loss = td.pow(2)
-        # print('c_loss', c_loss)
         # probs = F.softmax(policy, dim=1)
         prob = F.softmax(policy, dim=0) # 一维时使用dim=0，使用dim=1报错
-        # print('prob',prob)
         m = self.distribution(prob)
         # print(a.size(),m)
 
-        # print('m.log_prob(a)',m.log_prob(a).size())
+
         exp_v = m.log_prob(a) * td.detach().squeeze()
         print(exp_v.size(),c_loss.size())
         a_loss = -exp_v
         total_loss = (c_loss + a_loss).mean()
+
+        print('v_t is:',v_t)
+        print('policy is:',policy)
+        print('value is:',value)
+        print('td is:',td)
+        print('c_loss is:', c_loss)
+        print('prob is:',prob)
+        print('m is:',m)
+        print('m.log_prob(a) is:',m.log_prob(a))
+        print('exp_v is:', exp_v)
+        print('a_loss is:', a_loss)
+        print('total_loss is:', total_loss)
+
+        losslog = open('loss_log.txt', 'a')
+        losslog.flush()
+        losslog.write('v_t is:'+ str(v_t) + '\n')
+        losslog.write('policy is:'+ str(policy) + '\n')
+        losslog.write('value is:'+ str(value) + '\n')
+        losslog.write('td is:'+ str(td) + '\n')
+        losslog.write('c_loss is:'+ str(c_loss) + '\n')
+        losslog.write('prob is:'+ str(prob) + '\n')
+        losslog.write('m is:'+ str(m) + '\n')
+        losslog.write('m.log_prob(a) is:'+ str( m.log_prob(a)) + '\n')
+        losslog.write('exp_v is:'+ str(exp_v) + '\n')
+        losslog.write("a_loss: " + str(a_loss) + '\n')
+        losslog.write("total_loss: " + str(total_loss) + '\n')
+
+        losslog.close()
         return total_loss
 
 MAX_EPISODE = 200
 MAX_EP_STEPS = 5
 env = Environment()
 N_S = env.s_dim
-ACTION_BOUND = [-5,5]
-GAMMA = 0.9
+
+GAMMA = 0.2
 
 check_mem = True
 
@@ -156,8 +182,8 @@ for group in group_keys:
         optims.append(optim)
 
 t1 = time.time()
+s = env.reset()
 for i_episode in range(MAX_EPISODE):
-    s = env.reset()
     t = 0
     ep_rs = []
 
@@ -177,7 +203,8 @@ for i_episode in range(MAX_EPISODE):
         s_, r, done, info = env.step(actions)
         if not done: #timeout
             # continue
-            s_ = s, r = -4 # reward of all generation config
+            s_ = env.reset()
+            r = -4 # reward of all generation config
         s_ = torch.tensor(s_, dtype=torch.float32)
 
 
