@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import time,random, os
 import numpy as np
-from environment4 import Environment, single_keys, group_keys, group_items_keys, defaultConfig, N_PROGRAMS, seed, ACTION_BOUND
-# from .environment4 import Environment, single_keys, group_keys, group_items_keys,defaultConfig, N_PROGRAMS, seed, ACTION_BOUND
+# from environment4 import Environment, single_keys, group_keys, group_items_keys, defaultConfig, N_PROGRAMS, seed, ACTION_BOUND
+from .environment4 import Environment, single_keys, group_keys, group_items_keys,defaultConfig, N_PROGRAMS, seed, ACTION_BOUND
 
 
 random.seed(seed)
